@@ -1,0 +1,465 @@
+#colonization
+
+#read data from the pilot project
+colonize=read.csv("~/Dropbox/Projects!/Zea/col4.csv",stringsAsFactors=F)
+
+#get halfsibs with biomass and col data
+myc.with.coldata=subset(colonize, is.na(H.1)=="FALSE" & myc==1)#rows with coldata
+controldata=subset(colonize, myc==0)#control plants
+diffmat=data.frame(matrix(nrow=length(unique(myc.with.coldata$popmom)),ncol=(18))); popmom=c()
+for(j in 1:length(unique(myc.with.coldata$popmom))){#DEPENDS ON HAVING CORRECT COLUMNS
+	i=unique(myc.with.coldata$popmom)[j]
+	diffs=lapply(c(4,11,12,13),function(z) (mean(myc.with.coldata[which(as.character(myc.with.coldata$popmom)==as.character(i)),z]) 
+		- mean(controldata[which(as.character(controldata$popmom)==as.character(i)),z])))
+	sames=myc.with.coldata[j,]
+	sames=sames[c(-1,-2,-4,-7,-9,-10,-11,-12,-13,-20)]
+	colnames(diffmat)=colnames(data.frame(sames,diffs))
+	diffmat[j,]=as.character(data.frame(sames,diffs))
+}
+colnames(diffmat)[15:18]=c("DHeight","DShoot","DRoot","DTotal")
+Diffs=subset(diffmat, DShoot!="NaN")
+props=sapply(c(12:14),function(z) (as.numeric(Diffs[,z])/as.numeric(Diffs[,11])))#calculate colonization proportions
+totalcol=(as.numeric(Diffs[,12])+as.numeric(Diffs[,13])+as.numeric(Diffs[,14]))/(3*as.numeric(Diffs[,11]))
+pca1=as.numeric(Diffs$pca1)#types must be reassigned on data (here and elsewhere), due to formatting
+colnames(props)=colnames(Diffs)[12:14]
+shoots=as.numeric(Diffs$DShoot)
+
+
+####TOTAL BIOMASS - MODELLING HALF SIB DIFFERENCES bt TRTS
+
+d.col = data.frame(as.numeric(Diffs$sbsp),as.factor(Diffs$pop),shoots,as.numeric(Diffs$DRoot),as.numeric(Diffs$DTotal),as.numeric(Diffs$DHeight),pca1,as.numeric(Diffs$H.1),as.numeric(Diffs$A),as.numeric(Diffs$V),as.numeric(Diffs$Intersections),props,as.numeric(Diffs$pca2),as.numeric(Diffs$pca3),Diffs$popmom)#explicitly setting data type in columns
+colnames(d.col)=c("sbsp","pop","dshoot","droot","dtotal","dheight","pca1","H","A","V","Intersects","pH","pA","pV","pca2","pca3","popmom")
+
+# modelling the difference between halfsibs in total biomass, all models fully written out
+library(bbmle)
+effect0=mle2(dtotal~dnorm(mean=a,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),std.error=sd(d.col$dtotal)))
+effect1a=mle2(dtotal~dnorm(mean=a+b*pH,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#no
+effect1b=mle2(dtotal~dnorm(mean=a+b*pA,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#maybe, probably
+effect1c=mle2(dtotal~dnorm(mean=a+b*pV,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#maybe, probably
+###this 4th model is the OLD RESULT, now with half-sibs only
+effect1d=mle2(dtotal~dnorm(mean=a+b*pca1,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#maybe, also likely more important than the others in det. dshoot
+effect1e=mle2(dtotal~dnorm(mean=a+b*pca2,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#
+effect1f=mle2(dtotal~dnorm(mean=a+b*pca3,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,std.error=sd(d.col$dtotal)))#yupso
+#run file "compareminusBIC.R" if there is a problem, BIC is broken for my computer & R version
+compareminusBIC(effect0,effect1a,effect1b,effect1c,effect1d,effect1e,effect1f,nobs=nrow(d.col))
+#SUBSPECIES & PCA ARE COMPELEtely CORRELATED. SO DO NOT USE IN MODEL TOGETHER
+effect2a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pH,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pA,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2d=mle2(dtotal~dnorm(mean=a+b*pca3+c*pH,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2e=mle2(dtotal~dnorm(mean=a+b*pca3+c*pA,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2f=mle2(dtotal~dnorm(mean=a+b*pca3+c*pV,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2g=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2h=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+effect2i=mle2(dtotal~dnorm(mean=a+b*pca2+c*pca3,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,std.error=sd(d.col$dtotal)))
+compareminusBIC(effect1d,effect1f,effect2a,effect2b,effect2c,effect2d,effect2e,effect2f,effect2h,effect2i,nobs=nrow(d.col))
+#1d, 1f, 2h
+effect3a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3 + d*pH,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+effect3b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3 + d*pA,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+effect3c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3 + d*pV,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+effect3d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3 + d*pca1*pca3,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+effect3e=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV + d*pV*pca1,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+effect3f=mle2(dtotal~dnorm(mean=a+b*pca3+c*pV + d*pV*pca3,sd=std.error),data=d.col,start=list(a=mean(d.col$dtotal),b=0,c=0,d=0,std.error=sd(d.col$dtotal)))
+compareminusBIC(effect1d,effect2h,effect1f,effect3a,effect3b,effect3c,effect3d,effect3e,effect3f,nobs=nrow(d.col))
+#INCONCLUSIVE, but a+b*pca1+c*pV + d*pV*pca1 still comes out on top.
+#results similar for dheight, dshoot, droot is different. revised post may show this
+#worth doing all possible models? revised code may do this.
+
+#Exploring the posterior, pieces of this take a long time, aren't really necessary
+postE=sample.naive.posterior(effect3e)#lots of correlation among fitted values. just noticing
+#simulate datasets, 10000
+datasetE=lapply(1:nrow(postE),function(z) rnorm(mean=postE$a[z] + d.col$pca1*postE$b[z] + d.col$pV*postE$c[z] + d.col$pca1*d.col$pV*postE$d[z],sd=postE$std.error[z],n=nrow(d.col)))
+quartz()
+plot(d.col$dtotal~d.col$pca1,pch=NA)#warning, can be long time to plot this
+sapply(1:(length(datasetE)/10), function(z) points(datasetE[[z]]~d.col$pca1,pch=16,col=rgb((max(d.col$pV)-d.col$pV)/(max(d.col$pV)-min(d.col$pV)),0,1,alpha=.005)))
+points(d.col$dtotal~d.col$pca1,pch=21,bg=rgb((max(d.col$pV)-d.col$pV)/(max(d.col$pV)-min(d.col$pV)),0,1,alpha=.5))
+quartz()
+plot(d.col$dtotal~d.col$pV,pch=NA)
+sapply(1:(length(datasetE)/10), function(z) points(datasetE[[z]]~d.col$pV,pch=16,col=rgb((max(d.col$pca1)-d.col$pca1)/(max(d.col$pca1)-min(d.col$pca1)),0,1,alpha=.005)))
+points(d.col$dtotal~d.col$pV,pch=21,bg=rgb((max(d.col$pca1)-d.col$pca1)/(max(d.col$pca1)-min(d.col$pca1)),0,1,alpha=.5))
+
+#simulate at the extreme of pca1, show effect of v, total biomass (gaussian) modeled by :a+b*pca1+c*pV + d*pV*pca1 
+#generate seq of vesicle colonization extent
+vseq=seq(from=min(d.col$pV),to=max(d.col$pV),length.out=1000)
+#I want confidence intervals HPDI() of for the mean. so I need to use the posterior estimates
+pc1hi=max(pca1);pc1lo=min(pca1)
+library(rethinking)
+#confidence intervals for means (c.m) and model predictions (p.m) for high and low on pc1
+c.m=sapply(vseq, function(z) HPDI(postE$a+postE$b*pc1hi+postE$c*z+postE$d*z*pc1hi,.9))
+p.m=sapply(vseq, function(z) HPDI(rnorm(mean=postE$a+postE$b*pc1hi+postE$c*z+postE$d*z*pc1hi,sd=postE$std.error,n=length(postE)*1000),.9))
+c.m.l=sapply(vseq, function(z) HPDI(postE$a+postE$b*pc1lo+postE$c*z+postE$d*z*pc1lo,.9))
+p.m.l=sapply(vseq, function(z) HPDI(rnorm(mean=postE$a+postE$b*pc1lo+postE$c*z+postE$d*z*pc1lo,sd=postE$std.error,n=length(postE)*1000),.9))
+png("~/Dropbox/Projects!/Zea/tbiomass&pca1.png",w=5,h=5,res=200,units="in")
+quartz()
+plot(d.col$dtotal~d.col$pV,pch=NA,ylim=c(-17,8),ylab="Total Biomass",main="Half-sibs: Mycorrhizal-Control",xlab="Percent Intersections")
+points(d.col$dtotal~d.col$pV,pch=d.col$sbsp+16,col=
+	rgb(1-(d.col$pca1+1-min(d.col$pca1))/max(d.col$pca1+1-min(d.col$pca1)),0,1,alpha=.8))
+meanc=tapply(d.col$pV,d.col$pca1,FUN=mean)
+meanb=tapply(d.col$dtotal,d.col$pca1,FUN=mean)
+means=tapply(d.col$sbsp,d.col$pca1,FUN=mean)
+points(meanb~meanc,pch=means+1)
+lines(c.m[1,]~vseq,col=rgb(0,0,1));lines(c.m[2,]~vseq,col=rgb(0,0,1))
+lines(p.m[1,]~vseq);lines(p.m[2,]~vseq)
+lines(c.m.l[1,]~vseq,col=rgb(1,0,1,alpha=1));lines(c.m.l[2,]~vseq,col=rgb(1,0,1,alpha=1))
+lines(p.m.l[1,]~vseq,col=rgb(0,0,0,alpha=.1));lines(p.m.l[2,]~vseq,col=rgb(0,0,0,alpha=.1))
+legend(.15,-10,c("Lower & Warmer","Higher & Cooler"),fil=c(rgb(1,0,1),rgb(0,0,1)),bty="n",cex=.8)
+dev.off()
+
+
+#COLONIZATION AND PCA1.
+
+##DO THIS WITH ALL MYC DATA. no need for half sibs here.
+#at some point, may do more, i.e. "all possible models"
+#in general, higher pca1 are less colonized. but also, parviglumis are less colonized, and they are lowest pca 1.
+#hyphae:
+col0=mle2(H.1~dbinom(prob=logistic(a),size=Intersections),data=mdat,start=list(a=0))
+col1a=mle2(H.1~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=mdat,start=list(a=0,b=0))#best, predicts small diffs
+col1b=mle2(H.1~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=mdat,start=list(a=0,b=0))
+col1c=mle2(H.1~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=mdat,start=list(a=0,b=0))
+col1d=mle2(H.1~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=mdat,start=list(a=0,b=0))
+compareminusBIC(col0,col1a,col1b,col1c,col1d,nobs=nrow(mdat))#pca1
+#arbuscules
+arb0=mle2(A~dbinom(prob=logistic(a),size=Intersections),data=mdat,start=list(a=0))
+arb1a=mle2(A~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=mdat,start=list(a=0,b=0))
+arb1b=mle2(A~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=mdat,start=list(a=0,b=0))
+arb1c=mle2(A~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=mdat,start=list(a=0,b=0))
+arb1d=mle2(A~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=mdat,start=list(a=0,b=0))
+compareminusBIC(arb0,arb1a,arb1b,arb1c,arb1d,nobs=nrow(mdat))#sbsp
+#vesicles
+ves0=mle2(V~dbinom(prob=logistic(a),size=Intersections),data=mdat,start=list(a=0))
+ves1a=mle2(V~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=mdat,start=list(a=0,b=0))
+ves1b=mle2(V~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=mdat,start=list(a=0,b=0))
+ves1c=mle2(V~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=mdat,start=list(a=0,b=0))
+ves1d=mle2(V~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=mdat,start=list(a=0,b=0))
+compareminusBIC(ves1a,ves1b,ves1c,ves1d,ves0,nobs=nrow(mdat))#pca1
+#total mycorrhizal structures
+totaln=(mdat$H.1+mdat$A+mdat$V)
+totalposs=mdat$Intersections*3
+tot0=mle2(totaln~dbinom(prob=logistic(a),size=totalposs),data=mdat,start=list(a=0))
+tot1a=mle2(totaln~dbinom(prob=logistic(a+b*pca1),size=totalposs),data=mdat,start=list(a=0,b=0))
+tot1b=mle2(totaln~dbinom(prob=logistic(a+b*sbsp),size=totalposs),data=mdat,start=list(a=0,b=0))
+tot1c=mle2(totaln~dbinom(prob=logistic(a+b*pca2),size=totalposs),data=mdat,start=list(a=0,b=0))
+tot1d=mle2(totaln~dbinom(prob=logistic(a+b*pca3),size=totalposs),data=mdat,start=list(a=0,b=0))
+compareminusBIC(tot0,tot1a,tot1b,tot1c,tot1d,nobs=nrow(mdat))#1a
+
+# generating predictions and mean confidence intervals from posterior samples.
+postC=sample.naive.posterior(col1a)
+pca1seq=seq(from=min(mdat$pca1),to=max(mdat$pca1),length.out=1000)
+c.mCol=sapply(pca1seq, function(z) HPDI(logistic(postC$a+postC$b*z),.9))
+p.mCol=sapply(1:length(pca1seq), function(z) HPDI((rbinom(prob=logistic(postC$a+postC$b*pca1seq[z]),size=50,n=length(postC)*1000))/50,.9))
+#quartz()
+#png("~/Dropbox/Projects!/Zea/hyphae&pca1.png",w=5,h=5,res=200,units="in")
+par(mfrow=c(2,2))
+plot(mprops[,1]~mdat$pca1,xlab=NA,ylab="% intersections",main="Hyphae",pch=NA)
+lines(c.mCol[2,]~pca1seq);lines(c.mCol[1,]~pca1seq)
+lines(p.mCol[2,]~pca1seq,col="green");lines(p.mCol[1,]~pca1seq,col="green")
+points(mprops[,1]~mdat$pca1,pch=16,col=rgb(1,(mdat$Shoot-min(mdat$Shoot))/(max(mdat$Shoot)-min(mdat$Shoot)),0,1))
+means=tapply(mprops[,1],mdat$pca1,FUN=mean)
+points(means~sort(unique(mdat$pca1)))
+legend(0,.7,c("Bigger plants","Smaller plants"),fill=c(rgb(1,1,0),rgb(1,0,0)),bty="n")
+#dev.off()
+postT=sample.naive.posterior(tot1a)
+pca1seq=seq(from=min(mdat$pca1),to=max(mdat$pca1),length.out=1000)
+c.mTot=sapply(pca1seq, function(z) HPDI(logistic(postT$a+postT$b*z),.95))
+p.mTot=sapply(1:length(pca1seq), function(z) HPDI((rbinom(prob=logistic(postT$a+postT$b*pca1seq[z]),size=50,n=length(postT)*1000))/50,.95))
+#quartz()
+#png("~/Dropbox/Projects!/Zea/totalratecol&pca1.png",w=5,h=5,res=200,units="in")
+plot(totalprop~mdat$pca1,xlab=NA,main="Rate of all structures",ylab=NA,pch=NA)
+lines(c.mTot[2,]~pca1seq);lines(c.mTot[1,]~pca1seq)
+lines(p.mTot[2,]~pca1seq,col="green");lines(p.mTot[1,]~pca1seq,col="green")
+points(totalprop~mdat$pca1,pch=16,col=rgb(1,(mdat$Shoot-min(mdat$Shoot))/(max(mdat$Shoot)-min(mdat$Shoot)),0,1))
+means=tapply(totalprop,mdat$pca1,FUN=mean)
+points(means~sort(unique(mdat$pca1)))
+#legend(0,.4,c("Bigger plants","Smaller plants"),fill=c(rgb(1,1,0),rgb(1,0,0)),bty="n")
+#dev.off()
+postA=sample.naive.posterior(arb1a)
+pca1seq=seq(from=min(mdat$pca1),to=max(mdat$pca1),length.out=1000)
+c.mArb=sapply(pca1seq, function(z) HPDI(logistic(postA$a+postA$b*z),.95))
+p.mArb=sapply(1:length(pca1seq), function(z) HPDI((rbinom(prob=logistic(postA$a+postA$b*pca1seq[z]),size=50,n=length(postA)*1000))/50,.95))
+#quartz()
+#png("~/Dropbox/Projects!/Zea/arb&pca1.png",w=5,h=5,res=200,units="in")
+plot(mprops[,2]~mdat$pca1,xlab="pca1",main="Arbuscules",ylab="% Intersections",pch=NA)
+lines(c.mArb[2,]~pca1seq);lines(c.mArb[1,]~pca1seq)
+lines(p.mArb[2,]~pca1seq,col="green");lines(p.mArb[1,]~pca1seq,col="green")
+points(mprops[,2]~mdat$pca1,pch=16,col=rgb(1,(mdat$Shoot-min(mdat$Shoot))/(max(mdat$Shoot)-min(mdat$Shoot)),0,1))
+means=tapply(mprops[,2],mdat$pca1,FUN=mean)
+points(means~sort(unique(mdat$pca1)))
+#legend(0,.4,c("Bigger plants","Smaller plants"),fill=c(rgb(1,1,0),rgb(1,0,0)),bty="n")
+#dev.off()
+postV=sample.naive.posterior(ves1a)
+pca1seq=seq(from=min(mdat$pca1),to=max(mdat$pca1),length.out=1000)
+c.mVes=sapply(pca1seq, function(z) HPDI(logistic(postV$a+postV$b*z),.95))
+p.mVes=sapply(1:length(pca1seq), function(z) HPDI((rbinom(prob=logistic(postV$a+postV$b*pca1seq[z]),size=50,n=length(postV)*1000))/50,.95))
+#quartz()
+#png("~/Dropbox/Projects!/Zea/ves&pca1.png",w=5,h=5,res=200,units="in")
+plot(mprops[,3]~mdat$pca1,xlab="pca1",ylab=NA,main="Vesicles",pch=NA)
+lines(c.mVes[2,]~pca1seq);lines(c.mVes[1,]~pca1seq)
+lines(p.mVes[2,]~pca1seq,col="green");lines(p.mVes[1,]~pca1seq,col="green")
+points(mprops[,3]~mdat$pca1,pch=16,col=rgb(1,(mdat$Shoot-min(mdat$Shoot))/(max(mdat$Shoot)-min(mdat$Shoot)),0,1))
+means=tapply(mprops[,3],mdat$pca1,FUN=mean)
+points(means~sort(unique(mdat$pca1)))
+#legend(2,.6,c("Bigger plants","Smaller plants"),fill=c(rgb(1,1,0),rgb(1,0,0)),bty="n")
+#dev.off()
+
+######################################################################
+#DOES ROOT BIOMASS EXPLAIN TOTAL BIOMASS? DOES COL. HELP TO EXPLAIN TOTAL BIOMASS EVEN WHEN ROOT IS IN THE MODEL.
+#use mdat
+#are myc and rb corr?
+cor(mdat$Root,y=cbind(mprops[,1],mprops[,2],mprops[,3]))#some, not much 
+tbio0=mle2(Shoot~dnorm(mean=a,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),std.error=sd(mdat$Shoot)))
+tbio1a=mle2(Shoot~dnorm(mean=a + b*Root,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0, std.error=sd(mdat$Shoot)))
+tbio2a=mle2(Shoot~dnorm(mean=a + b*Root + c*totalprop,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,std.error=sd(mdat$Shoot)))
+tbio2b=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,3],sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,std.error=sd(mdat$Shoot)))
+tbio2c=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,2],sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,std.error=sd(mdat$Shoot)))
+tbio2d=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,1],sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,std.error=sd(mdat$Shoot)))
+tbio3a=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,3]+d*mprops[,3]*Root,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,d=0,std.error=sd(mdat$Shoot)))
+tbio3b=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,2]+d*mprops[,2]*Root,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,d=0,std.error=sd(mdat$Shoot)))
+tbio3c=mle2(Shoot~dnorm(mean=a + b*Root + c*mprops[,1]+d*mprops[,1]*Root,sd=std.error),data=mdat,start=list(a=mean(mdat$Shoot),b=0,c=0,d=0,std.error=sd(mdat$Shoot)))
+compareminusBIC(tbio0,tbio1a,tbio2a,tbio2b,tbio2c,tbio2d,tbio3a,tbio3b,tbio3c,nobs=nrow(mdat))
+##NOPE ALL WORSE THAN 1a. this means not much. just lack of evidence that myc extent might influence allocation
+##ALSO Shoot vs Total as resp. var does not change this, edit may show this later
+##below, I use other subsets of data
+#repeat above with all control & myc plants:
+allcol=data.frame(colonize)
+tbio0=mle2(Total~dnorm(mean=a,sd=std.error),data=allcol,start=list(a=mean(colonize$Total),std.error=sd(colonize$Total)))
+tbio1a=mle2(Total~dnorm(mean=a + b*Root,sd=std.error),data=allcol,start=list(a=mean(colonize$Total),b=0, std.error=sd(colonize$Total)))
+tbio2a=mle2(Total~dnorm(mean=a + b*Root + c*myc,sd=std.error),data=allcol,start=list(a=mean(colonize$Total),b=0,c=0,std.error=sd(colonize$Total)))
+tbio3=mle2(Total~dnorm(mean=a + b*Root + c*myc+d*myc*Root,sd=std.error),data=allcol,start=list(a=mean(colonize$Total),b=0,c=0,d=0,std.error=sd(colonize$Total)))
+compareminusBIC(tbio0,tbio1a,tbio2a,tbio3,nobs=nrow(mdat))
+#okay. same result. AND Shoot vs Total still doesnt change.
+#for popmyc 
+#CODE IS BROKEN here. input for this is generated below.
+pbio0=mle2(Total~dnorm(mean=a,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),std.error=sd(popmyc$Total)))
+pbio1=mle2(Total~dnorm(mean=a + b*Root,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0, std.error=sd(popmyc$Total)))
+pbio2a=mle2(Total~dnorm(mean=a + b*Root + c*pTot,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,std.error=sd(popmyc$Total)))
+pbio2b=mle2(Total~dnorm(mean=a + b*Root + c*pH.1,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,std.error=sd(popmyc$Total)))
+pbio2c=mle2(Total~dnorm(mean=a + b*Root + c*pA,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,std.error=sd(popmyc$Total)))
+pbio2d=mle2(Total~dnorm(mean=a + b*Root + c*pV,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,std.error=sd(popmyc$Total)))
+pbio3a=mle2(Total~dnorm(mean=a + b*Root + c*pV+d*pV*Root,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,d=0,std.error=sd(popmyc$Total)))
+pbio3b=mle2(Total~dnorm(mean=a + b*Root + c*pA+d*pA*Root,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,d=0,std.error=sd(popmyc$Total)))
+pbio3c=mle2(Total~dnorm(mean=a + b*Root + c*pH.1+d*pH.1*Root,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,d=0,std.error=sd(popmyc$Total)))
+pbio3d=mle2(Total~dnorm(mean=a + b*Root + c*pTot+d*pTot*Root,sd=std.error),data=popmyc,start=list(a=mean(popmyc$Total),b=0,c=0,d=0,std.error=sd(popmyc$Total)))
+compareminusBIC(pbio0,pbio1,pbio3a,pbio3b,pbio3c,pbio3d,nobs=nrow(popmyc))#1 is best. no ev to add root.
+#if repl with shoot, 1 and 0 are tied.
+##make the dataframe out of all colonized data
+alldiff=data.frame(matrix(nrow=length(unique(paste(allcol$pop,allcol$myc))),ncol=9))
+toget=c(1,3,4,11:16)
+for( i in 1:length(toget)){alldiff[,i]=tapply(allcol[,toget[i]],paste(allcol$pop,allcol$myc),FUN=mean)}
+colnames(alldiff)=colnames(allcol)[c(1,3,4,11:16)]
+rownames(alldiff)=sort(unique(paste(allcol$pop,allcol$myc)))
+tbio0=mle2(Total~dnorm(mean=a,sd=std.error),data=alldiff,start=list(a=mean(alldiff$Total),std.error=sd(alldiff$Total)))
+tbio1a=mle2(Total~dnorm(mean=a + b*Root,sd=std.error),data=alldiff,start=list(a=mean(alldiff$Total),b=0, std.error=sd(alldiff$Total)))
+tbio2a=mle2(Total~dnorm(mean=a + b*Root + c*myc,sd=std.error),data=alldiff,start=list(a=mean(alldiff$Total),b=0,c=0,std.error=sd(alldiff$Total)))
+tbio3=mle2(Total~dnorm(mean=a + b*Root + c*myc+d*myc*Root,sd=std.error),data=alldiff,start=list(a=mean(alldiff$Total),b=0,c=0,d=0,std.error=sd(alldiff$Total)))
+compareminusBIC(tbio0,tbio1a,tbio2a,tbio3,nobs=nrow(alldiff))
+#and still no evidence. I just don't have this in my data.
+
+##POPMEANS
+# for biomass differences bt halfsibs
+popdiff=data.frame(matrix(nrow=length(unique(d.col$pop)),ncol=11))
+#tapply mean for height, shoot, root, total,subsp,pca1,pca2,pca3 
+toget=c(1,3,4,5,6,7,15,16)
+for( i in 1:length(toget)){popdiff[,i]=tapply(d.col[,toget[i]],d.col$pop,FUN=mean)}
+#how do I deal with the pop? I think I am may be observing a proportion now?
+#lets just pretend all individuals have the same basic rate for now. i.e. sum intersections and sum observations!
+toget=c(8,9,10,11)
+for(i in 1:length(toget)){popdiff[,i+8]=tapply(d.col[,toget[i]],d.col$pop,FUN=sum)}
+colnames(popdiff)=colnames(d.col)[c(1,3,4,5,6,7,15,16,8,9,10,11)]
+rownames(popdiff)=sort(unique(d.col$pop))
+popdiff$pH=popdiff$H/popdiff$Intersects
+popdiff$pA=popdiff$A/popdiff$Intersects
+popdiff$pV=popdiff$V/popdiff$Intersects
+popdiff$ntot=popdiff$H+popdiff$A+popdiff$V
+popdiff$samptot=popdiff$Intersects*3
+popdiff$pTot=popdiff$ntot/(popdiff$Intersects*3)
+#re-ask questions.
+#what explains total biomass diffs? col extent, sbsp, pca1 2 3,
+popeff0=mle2(dtotal~dnorm(mean=a,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),std.error=sd(popdiff$dtotal)))
+popeff1a=mle2(dtotal~dnorm(mean=a+b*pH,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1b=mle2(dtotal~dnorm(mean=a+b*pA,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1c=mle2(dtotal~dnorm(mean=a+b*pV,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1d=mle2(dtotal~dnorm(mean=a+b*pTot,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1e=mle2(dtotal~dnorm(mean=a+b*pca1,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1f=mle2(dtotal~dnorm(mean=a+b*pca2,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1g=mle2(dtotal~dnorm(mean=a+b*pca3,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+popeff1h=mle2(dtotal~dnorm(mean=a+b*sbsp,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,std.error=sd(popdiff$dtotal)))#
+compareminusBIC(popeff0,popeff1a,popeff1b,popeff1c,popeff1d,popeff1e,popeff1f,popeff1g,popeff1h,nobs=nrow(popdiff))
+#0 wins, 1g close second. 1e too.
+popeff2a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pH,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pA,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pTot,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2e=mle2(dtotal~dnorm(mean=a+b*pca3+c*pH,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2f=mle2(dtotal~dnorm(mean=a+b*pca3+c*pA,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2g=mle2(dtotal~dnorm(mean=a+b*pca3+c*pV,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2h=mle2(dtotal~dnorm(mean=a+b*pca3+c*pTot,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2i=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2j=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+popeff2k=mle2(dtotal~dnorm(mean=a+b*pca2+c*pca3,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,std.error=sd(popdiff$dtotal)))
+compareminusBIC(popeff0,popeff1g,popeff1e,popeff2a,popeff2b,popeff2c,popeff2d,popeff2e,popeff2f,popeff2h,popeff2i,popeff2j,popeff2k,nobs=nrow(popdiff))
+#2i beats 0, nothing else does. pca1 + pca2
+popeff3a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2 + d*pH,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2 + d*pA,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2 + d*pV,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2 + d*pTot,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3e=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2 + d*pca1*pca2,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3f=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV + d*pV*pca1,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+popeff3g=mle2(dtotal~dnorm(mean=a+b*pca2+c*pV + d*pV*pca2,sd=std.error),data=popdiff,start=list(a=mean(popdiff$dtotal),b=0,c=0,d=0,std.error=sd(popdiff$dtotal)))
+compareminusBIC(popeff2i,popeff0,popeff3a,popeff3b,popeff3c,popeff3d,popeff3e,popeff3f,popeff3g,nobs=nrow(popdiff))#2i it is.
+
+#do for the col data -- dataframe is "mdat"
+popmyc=data.frame(matrix(nrow=length(unique(mdat$pop)),ncol=12))
+#tapply mean for height, shoot, root, total,subsp,pca1,pca2,pca3 
+toget=c(3,4,11,12,13,14,15,16)
+for( i in 1:length(toget)){popmyc[,i]=tapply(mdat[,toget[i]],mdat$pop,FUN=mean)}
+#how do I deal with the pop? I think I am may be observing a proportion now?
+#lets just pretend all individuals have the same basic rate for now. i.e. sum intersections and sum observations!
+toget=c(21,22,23,24)
+for(i in 1:length(toget)){popmyc[,i+8]=tapply(mdat[,toget[i]],mdat$pop,FUN=sum)}
+colnames(popmyc)=colnames(mdat)[c(3,4,11,12,13,14,15,16,21,22,23,24)]
+rownames(popmyc)=sort(unique(mdat$pop))
+popmyc$pH.1=popmyc$H.1/popmyc$Intersections
+popmyc$pA=popmyc$A/popmyc$Intersections
+popmyc$pV=popmyc$V/popmyc$Intersections
+popmyc$ntot=popmyc$H.1+popmyc$A+popmyc$V
+popmyc$samptot=popmyc$Intersections*3
+popmyc$pTot=popmyc$ntot/(popmyc$Intersections*3)
+#with this dataframe, I should ask all i did before, now with pop means as response. (root biom&total biom too?--above)
+##ROOTS ARE CORR TO MYC IN THIS DATASET! -- although, note (way) above, that this does not translate into induced root production. just a general size col correlation
+#
+popcol0=mle2(H.1~dbinom(prob=logistic(a),size=Intersections),data=popmyc,start=list(a=0))
+popcol1a=mle2(H.1~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0))#hands down best, small diffs, but nearly complete range of pH
+popcol1b=mle2(H.1~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+popcol1c=mle2(H.1~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+popcol1d=mle2(H.1~dbinom(prob=logistic(a+b*Root),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+popcol1e=mle2(H.1~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+popcol2a=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*Root),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popcol2b=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popcol2c=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popcol3a=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+popcol3b=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+popcol3c=mle2(H.1~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca1*Root),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+compareminusBIC(popcol0,popcol1a,popcol1b,popcol1c,popcol1d,popcol1e,nobs=nrow(popmyc))
+compareminusBIC(popcol0,popcol1a,popcol2a,popcol2b,popcol2c,popcol3a,popcol3b,popcol3c,nobs=nrow(popmyc))#1a best.
+#
+poparb0=mle2(A~dbinom(prob=logistic(a),size=Intersections),data=popmyc,start=list(a=0))
+poparb1a=mle2(A~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0))# 
+poparb1b=mle2(A~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+poparb1c=mle2(A~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+poparb1d=mle2(A~dbinom(prob=logistic(a+b*Root),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+poparb1e=mle2(A~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=popmyc,start=list(a=0,b=0))#
+poparb2a=mle2(A~dbinom(prob=logistic(a+b*sbsp+c*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#pca3 is only additional expln var NOT corr to sbsp
+poparb2b=mle2(A~dbinom(prob=logistic(a+b*pca1+c*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#p
+poparb2c=mle2(A~dbinom(prob=logistic(a+b*pca1+c*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#p
+poparb2d=mle2(A~dbinom(prob=logistic(a+b*pca1+c*Root),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#both roots & pca1 seem to explain about 10% range of var in arb col
+poparb3a=mle2(A~dbinom(prob=logistic(a+b*pca1+c*Root+d*Root*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+poparb3b=mle2(A~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+poparb3c=mle2(A~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+compareminusBIC(poparb1a,poparb1e,poparb2a,poparb2b,poparb2c,poparb2d,poparb3a,poparb3b,poparb3c,nobs=nrow(popmyc))#nearly all 2d
+compareminusBIC(poparb0,poparb1a,poparb1b,poparb1c,poparb1d,poparb1e,nobs=nrow(popmyc))#1e (2/3) and 1a (1/3)
+compareminusBIC(poparb1a,poparb1e,poparb2d,poparb3a,poparb3b,poparb3c,nobs=nrow(popmyc))#nearly all 2d
+#
+popves0=mle2(V~dbinom(prob=logistic(a),size=Intersections),data=popmyc,start=list(a=0))
+popves1a=mle2(V~dbinom(prob=logistic(a+b*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0))#best
+popves1b=mle2(V~dbinom(prob=logistic(a+b*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0))
+popves1c=mle2(V~dbinom(prob=logistic(a+b*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0))
+popves1d=mle2(V~dbinom(prob=logistic(a+b*Root),size=Intersections),data=popmyc,start=list(a=0,b=0))
+popves1e=mle2(V~dbinom(prob=logistic(a+b*sbsp),size=Intersections),data=popmyc,start=list(a=0,b=0))
+popves2a=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popves2b=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca3),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popves2c=mle2(V~dbinom(prob=logistic(a+b*pca1+c*Root),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0))#
+popves3a=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca3+d*pca3*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))# 
+popves3b=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca3+d*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+popves3c=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca3+d*Root),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+popves3d=mle2(V~dbinom(prob=logistic(a+b*pca1+c*Root+d*Root*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#b.
+popves3e=mle2(V~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca2),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+popves3f=mle2(V~dbinom(prob=logistic(a+b*pca1+c*pca2+d*pca2*pca1),size=Intersections),data=popmyc,start=list(a=0,b=0,c=0,d=0))#.
+compareminusBIC(popves0,popves1a,popves1b,popves1c,popves1d,nobs=nrow(popmyc))
+compareminusBIC(popves1a,popves2b,popves2a,popves2c,popves3a,popves3b,popves3c,popves3d,popves3e,popves3f,nobs=nrow(popmyc))#1a still best
+#
+poptot0=mle2(ntot~dbinom(prob=logistic(a),size=samptot),data=popmyc,start=list(a=0))
+poptot1a=mle2(ntot~dbinom(prob=logistic(a+b*pca1),size=samptot),data=popmyc,start=list(a=0,b=0))#best, only difference in 6% col, but that is nearly whole range of pTot
+poptot1b=mle2(ntot~dbinom(prob=logistic(a+b*pca2),size=samptot),data=popmyc,start=list(a=0,b=0))
+poptot1c=mle2(ntot~dbinom(prob=logistic(a+b*pca3),size=samptot),data=popmyc,start=list(a=0,b=0))
+poptot1d=mle2(ntot~dbinom(prob=logistic(a+b*Root),size=samptot),data=popmyc,start=list(a=0,b=0))
+poptot1e=mle2(ntot~dbinom(prob=logistic(a+b*sbsp),size=samptot),data=popmyc,start=list(a=0,b=0))
+poptot2a=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*pca2),size=samptot),data=popmyc,start=list(a=0,b=0,c=0))#
+poptot2b=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*pca3),size=samptot),data=popmyc,start=list(a=0,b=0,c=0))#
+poptot2c=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*Root),size=samptot),data=popmyc,start=list(a=0,b=0,c=0))#
+poptot3a=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca2),size=samptot),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+poptot3b=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*Root+d*pca3),size=samptot),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+poptot3c=mle2(ntot~dbinom(prob=logistic(a+b*pca1+c*Root+d*Root*pca1),size=samptot),data=popmyc,start=list(a=0,b=0,c=0,d=0))#
+compareminusBIC(poptot1a,poptot3b,poptot3a,poptot2c,poptot3c,nobs=nrow(popmyc))#1a best out of all.
+compareminusBIC(poptot1a,poptot1b,poptot1c,poptot1d,poptot1e,poptot0,nobs=nrow(popmyc))
+##CONCL: pca1 is THE best at explaining colonization, out of subsp etc. 
+
+
+###########################INTROGRESSION ANALYSIS
+kinship=read.table("~/Dropbox/Projects!/Zea/q_matrix.txt",header=T)
+kinship=subset(kinship, is.na(pop) == "FALSE")
+kinship$popmom=paste(kinship$pop, kinship$mom, sep=" ")
+kindat=sapply(d.col$popmom, function(z) kinship[grep(as.character(z),kinship$popmom),])
+kindat2=as.data.frame(t(kindat))
+d.col$kindat=as.numeric(kindat2$clust1)
+onlykin=subset(d.col, is.na(kindat)=="FALSE")
+ cor(onlykin$kindat,y=onlykin[,3:7])
+#          dshoot       droot     dtotal    dheight
+#[1,] -0.05139788 -0.02285874 -0.0466619 -0.1123012 -0.04995299
+ cor(onlykin$kindat,y=onlykin[,c(12:16,21)])
+#not really correlated to anything. but might be correlated to residuals of something, thus I do the below mods
+onlykin$ntot=onlykin$H+onlykin$A+onlykin$V
+onlykin$samptot=onlykin$Intersects*3
+onlykin$pTot=onlykin$ntot/onlykin$samptot
+plot(onlykin$dtotal~onlykin$pca1,pch=16,col=rgb((onlykin$kindat-min(onlykin$kindat))/(max(onlykin$kindat)-min(onlykin$kindat)),0,1,alpha=.8))
+plot(onlykin$dtotal~onlykin$pV,pch=16,col=rgb((onlykin$kindat-min(onlykin$kindat))/(max(onlykin$kindat)-min(onlykin$kindat)),0,1,alpha=.8))
+plot(onlykin$dtotal~onlykin$pH,pch=16,col=rgb((onlykin$kindat-min(onlykin$kindat))/(max(onlykin$kindat)-min(onlykin$kindat)),0,1,alpha=.8))
+#does kinship with maize vs teo explain response to mycorrhizae?
+biokin0=mle2(dtotal~dnorm(mean=a,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),std.error=sd(onlykin$dtotal)))
+biokin1a=mle2(dtotal~dnorm(mean=a+b*pca1,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1b=mle2(dtotal~dnorm(mean=a+b*kindat,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1c=mle2(dtotal~dnorm(mean=a+b*pca2,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1d=mle2(dtotal~dnorm(mean=a+b*pca3,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1e=mle2(dtotal~dnorm(mean=a+b*pV,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1f=mle2(dtotal~dnorm(mean=a+b*pA,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1g=mle2(dtotal~dnorm(mean=a+b*pH,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+biokin1h=mle2(dtotal~dnorm(mean=a+b*pTot,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,std.error=sd(onlykin$dtotal)))
+compareminusBIC(biokin0,biokin1a,biokin1b,biokin1c,biokin1d,biokin1e,biokin1f,biokin1g,biokin1h,nobs=nrow(onlykin))
+biokin2a=mle2(dtotal~dnorm(mean=a+b*pca1+c*kindat,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pH,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pA,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2e=mle2(dtotal~dnorm(mean=a+b*pca1+c*pTot,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2f=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca2,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+biokin2g=mle2(dtotal~dnorm(mean=a+b*pca1+c*pca3,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,std.error=sd(onlykin$dtotal)))
+compareminusBIC(biokin0,biokin1a,biokin2a,biokin2b,biokin2c,biokin2d,biokin2e,biokin2f,biokin2g,nobs=nrow(onlykin))
+biokin3a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*kindat,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))
+biokin3b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca2,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))
+biokin3c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca3,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))
+#biokin3d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pH,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))NOT ALLOWED DUE TO CORR
+biokin3e=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pA,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))
+biokin3f=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca1*pV,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,std.error=sd(onlykin$dtotal)))
+compareminusBIC(biokin0,biokin1a,biokin2b,biokin3a,biokin3b,biokin3c,biokin3e,biokin3f,nobs=nrow(onlykin))
+biokin4a=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca1*pV+e*kindat,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,e=0,std.error=sd(onlykin$dtotal)))
+biokin4b=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca1*pV+e*pca2,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,e=0,std.error=sd(onlykin$dtotal)))
+biokin4c=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca1*pV+e*pca3,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,e=0,std.error=sd(onlykin$dtotal)))
+biokin4d=mle2(dtotal~dnorm(mean=a+b*pca1+c*pV+d*pca1*pV+e*pA,sd=std.error),data=onlykin,start=list(a=mean(onlykin$dtotal),b=0,c=0,d=0,e=0,std.error=sd(onlykin$dtotal)))
+compareminusBIC(biokin0,biokin1a,biokin2b,biokin3f,biokin4a,biokin4b,biokin4c,biokin4d,nobs=nrow(onlykin))
+#model selection does not add kin as more important than pca1 and pV. to which kinship with teo vs maize is NOT correlated
+###directly testing residuals and kin?
+#biokin1a vs biokin2a show that as biokin1a is better than 2a,  the below shows there's essentially no correlation bt residuals and kin
+resb1a=residuals(bio1a)
+cor(resb1a,y=onlykin$kindat)#hell no
+
+
+
+
+library(ggplot2);library(reshape)
+##qplots
+quartz();qplot(x=X1, y=X2, data=melt(cor(allcol[,c(1,3:4,11:16,20)])), geom="tile",fill=value,main="allcol") + scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(popdiff[,c(1:8,13:15,18)])), fill=value, geom="tile",main="popdiff") + scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(popmyc[,c(1:8,13:15,18)])), fill=value, geom="tile",main="popmyc")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(onlykin[,c(3:7,12:16,18,21)])), fill=value, geom="tile",main="onlykin")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(data.frame(d.col[,c(1,3:7,12:16)],totalcol))), fill=value, geom="tile",main="d.col")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(alldiff)), fill=value, geom="tile",main="alldiff")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(data.frame(mdat[,c(3:4,11:16)],mprops[,1:3],totalprop))), fill=value, geom="tile",main="mdat")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
+quartz();qplot(x=X1, y=X2, data=melt(cor(data.frame(d.col[,c(1,3:7,12:16)],totalcol))), fill=value, geom="tile",main="d.col")+ scale_fill_gradient2(low="blue",mid="white",high="red",limits=c(-1,1))
